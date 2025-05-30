@@ -3,7 +3,71 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 
 import User from '../models/model-user';
-import { EStatus } from '../types/user';
+import { EStatus, IUser } from '../types/user';
+
+interface IAuthRequest extends Request {
+    userAuth?: IUser | null;
+}
+
+const adminLoginNew = async (req: Request, res: Response) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            res.json({
+                success: false,
+                message: "email or password can't be empty"
+            });
+            return;
+        }
+
+        const checkUser = await User.findOne({ u_email: email });
+
+        if (!checkUser) {
+            res.json({ message: 'Invalid email' });
+            return;
+        }
+
+        const passwordMatch = await bcrypt.compare(
+            password,
+            checkUser.u_password
+        );
+
+        if (!passwordMatch) {
+            res.json({ message: 'Invalid credentials' });
+            return;
+        }
+
+        if (checkUser && passwordMatch) {
+            const token = jwt.sign(
+                { _id: checkUser._id, email: checkUser.u_email },
+                'secret',
+                { expiresIn: '1h' }
+            );
+
+            res.cookie('accessToken', token, {
+                httpOnly: true,
+                // secure: process.env.NODE_ENV === 'production',
+                sameSite: 'strict',
+                maxAge: 60 * 60 * 1000,
+                path: '/'
+            });
+
+            res.status(200).json({
+                success: true,
+                message: 'Admin logged in',
+                userId: checkUser._id
+            });
+            return;
+        }
+    } catch (error) {
+        if (error instanceof Error) {
+            res.status(500).json({
+                message: `Error when login: ${error.message}`
+            });
+            return;
+        }
+    }
+};
 
 const adminLogin = async (req: Request, res: Response) => {
     try {
@@ -19,7 +83,7 @@ const adminLogin = async (req: Request, res: Response) => {
 
         const checkUser = await User.findOne({ u_email: email });
         if (!checkUser) {
-            res.status(401).json({ message: 'Invalid email' });
+            res.json({ message: 'Invalid email' });
             return;
         }
 
@@ -28,7 +92,7 @@ const adminLogin = async (req: Request, res: Response) => {
             checkUser.u_password
         );
         if (!passwordMatch) {
-            res.status(401).json({ error: 'Invalid credentials' });
+            res.json({ message: 'Invalid credentials' });
             return;
         }
 
@@ -48,36 +112,72 @@ const adminLogin = async (req: Request, res: Response) => {
     } catch (error) {
         if (error instanceof Error) {
             res.status(500).json({
-                error: `Error when login: ${error.message}`
+                message: `Error when login: ${error.message}`
             });
             return;
         }
     }
 };
 
-const adminGetInfo = async (req: Request, res: Response) => {
+const adminGetInfo = async (req: IAuthRequest, res: Response) => {
     try {
-        const id = req.params.id;
-        const query = await User.findById(id);
+        if (!req.userAuth) {
+            res.status(401).json({
+                success: false,
+                message: 'User not authenticated'
+            });
+            return;
+        }
 
-        if (!query) {
+        const user = await User.findById(req.userAuth._id).select(
+            '-u_password'
+        );
+        if (!user) {
             res.status(404).json({
                 success: false,
                 message: 'Admin user not found'
             });
+            return;
         }
 
-        if (query) {
-            res.status(200).json(query);
-        }
+        res.status(200).json({
+            success: true,
+            data: user
+        });
+        return;
     } catch (error) {
         if (error instanceof Error) {
             res.status(500).json({
-                error: `Error when get admin info: ${error.message}`
+                success: false,
+                message: `Error of when fetching logged in admin: ${error.message}`
             });
             return;
         }
     }
+
+    // try {
+    //     const id = req.params.id;
+    //     const query = await User.findById(id);
+
+    //     if (!query) {
+    //         res.status(404).json({
+    //             success: false,
+    //             message: 'Admin user not found'
+    //         });
+    //     }
+
+    //     if (query) {
+    //         res.status(200).json(query);
+    //     }
+    // } catch (error) {
+    //     if (error instanceof Error) {
+    //         res.status(500).json({
+    //             success: false,
+    //             message: `Error when get admin info: ${error.message}`
+    //         });
+    //         return;
+    //     }
+    // }
 };
 
 const adminCreateUserAccount = async (req: Request, res: Response) => {
@@ -95,9 +195,9 @@ const adminCreateUserAccount = async (req: Request, res: Response) => {
         const isDuplicate = await User.findOne({ u_email: email });
 
         if (isDuplicate) {
-            res.status(409).json({
+            res.json({
                 success: false,
-                message: 'Email already exists'
+                message: 'Email already exists la'
             });
             return;
         }
@@ -116,17 +216,21 @@ const adminCreateUserAccount = async (req: Request, res: Response) => {
         });
 
         if (user) {
-            res.status(200).json({ success: true, user });
+            res.status(200).json({
+                success: true,
+                message: `Successfully created a user!`
+            });
             return;
         }
     } catch (error) {
         if (error instanceof Error) {
             res.status(500).json({
-                error: `Error of when creating a user: ${error.message}`
+                success: false,
+                message: `Error of when creating a user: ${error.message}`
             });
             return;
         }
     }
 };
 
-export { adminCreateUserAccount, adminLogin, adminGetInfo };
+export { adminCreateUserAccount, adminLogin, adminGetInfo, adminLoginNew };
