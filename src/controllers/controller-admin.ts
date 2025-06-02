@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
+import jwt, { JwtPayload } from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 
 import User from '../models/model-user';
@@ -38,24 +38,29 @@ const adminLoginNew = async (req: Request, res: Response) => {
         }
 
         if (checkUser && passwordMatch) {
-            const token = jwt.sign(
+            const genAccessToken = jwt.sign(
                 { _id: checkUser._id, email: checkUser.u_email },
-                'secret',
-                { expiresIn: '1h' }
+                'test',
+                { expiresIn: '10s' }
+            );
+            const genRefreshToken = jwt.sign(
+                { _id: checkUser._id, email: checkUser.u_email },
+                'test',
+                { expiresIn: '3m' }
             );
 
-            res.cookie('accessToken', token, {
+            res.cookie('refreshToken', genRefreshToken, {
                 httpOnly: true,
                 // secure: process.env.NODE_ENV === 'production',
                 sameSite: 'strict',
-                maxAge: 60 * 60 * 1000,
+                maxAge: 60000,
                 path: '/'
             });
 
             res.status(200).json({
                 success: true,
-                message: 'Admin logged in',
-                userId: checkUser._id
+                userId: checkUser._id,
+                accessToken: genAccessToken
             });
             return;
         }
@@ -97,15 +102,21 @@ const adminLogin = async (req: Request, res: Response) => {
         }
 
         if (checkUser && passwordMatch) {
-            const token = jwt.sign(
+            const accessToken = jwt.sign(
                 { _id: checkUser._id, email: checkUser.u_email },
                 'secret',
                 { expiresIn: '1hr' }
             );
+
+            const refreshToken = jwt.sign(
+                { _id: checkUser._id, email: checkUser.u_email },
+                'secret',
+                { expiresIn: '1d' }
+            );
             res.status(200).json({
                 success: true,
-                message: 'Admin logged in',
-                accessToken: token
+                accessToken: accessToken,
+                refreshToken: refreshToken
             });
             return;
         }
@@ -113,6 +124,49 @@ const adminLogin = async (req: Request, res: Response) => {
         if (error instanceof Error) {
             res.status(500).json({
                 message: `Error when login: ${error.message}`
+            });
+            return;
+        }
+    }
+};
+
+const handleRefreshToken = async (req: IAuthRequest, res: Response) => {
+    try {
+        const refreshToken = req.cookies.refreshToken;
+        console.log('get ref token', refreshToken);
+        if (!refreshToken) {
+            res.json({ message: 'No refreshToken provided' });
+            console.log('No refreshToken provided');
+            return;
+        }
+
+        const decode = jwt.verify(refreshToken, 'test') as JwtPayload;
+
+        if (!decode) {
+            console.log('verify ref token not okay', decode);
+            return;
+        }
+
+        if (decode) {
+            console.log('verify ref token okay', decode);
+            const genNewAccessToken = jwt.sign(
+                {
+                    _id: decode._id,
+                    email: decode.email
+                },
+                'test',
+                { expiresIn: '10s' }
+            );
+
+            res.json({ accessToken: genNewAccessToken });
+            console.log('the new access token', genNewAccessToken);
+            return;
+        }
+    } catch (error) {
+        if (error instanceof Error) {
+            res.status(500).json({
+                success: false,
+                message: `Error of when refresh token: ${error.message}`
             });
             return;
         }
@@ -233,4 +287,10 @@ const adminCreateUserAccount = async (req: Request, res: Response) => {
     }
 };
 
-export { adminCreateUserAccount, adminLogin, adminGetInfo, adminLoginNew };
+export {
+    adminCreateUserAccount,
+    adminLogin,
+    handleRefreshToken,
+    adminGetInfo,
+    adminLoginNew
+};
