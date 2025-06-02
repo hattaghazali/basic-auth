@@ -3,11 +3,15 @@ import jwt from 'jsonwebtoken';
 import { IUser } from '../types/user';
 import User from '../models/model-user';
 
-// interface IAuthRequest extends Request {
-//     isUser?: IUser;
-// }
+interface IAuthRequest extends Request {
+    userAuth?: IUser | null;
+}
 
-const verifyToken = async (req: Request, res: Response, next: NextFunction) => {
+const verifyToken = async (
+    req: IAuthRequest,
+    res: Response,
+    next: NextFunction
+) => {
     try {
         // Extract token from Authorization header
         const authHeader = req.header('Authorization');
@@ -16,20 +20,22 @@ const verifyToken = async (req: Request, res: Response, next: NextFunction) => {
                 success: false,
                 message: 'No Authorization header provided'
             });
+            console.log(`no auth header provided`);
             return;
         }
 
-        const token = authHeader.replace('Bearer ', '');
-        if (!token) {
+        const accessToken = authHeader.replace('Bearer ', '');
+        if (!accessToken) {
             res.status(401).json({
                 success: false,
                 message: 'No token provided'
             });
+            console.log(`no token provide`);
             return;
         }
 
         // Verify token
-        const decoded = jwt.verify(token, 'secret') as {
+        const decoded = jwt.verify(accessToken, 'test') as {
             _id: string;
             email: string;
         };
@@ -43,10 +49,12 @@ const verifyToken = async (req: Request, res: Response, next: NextFunction) => {
                 success: false,
                 message: 'Invalid token: User not found'
             });
+            console.log(`Invalid token: User not found`, user);
             return;
         }
 
-        console.log(user);
+        req.userAuth = user;
+        // console.log(`verify logged in user`, user);
         next();
     } catch (error) {
         if (error instanceof Error) {
