@@ -20,15 +20,21 @@ const schemaUser = new mongoose.Schema<IUser>(
         },
         u_state: {
             type: Number,
-            enum: Object.values(EState).filter((value) => typeof value === 'number') as number[]
+            enum: Object.values(EState).filter(
+                (value) => typeof value === 'number'
+            ) as number[]
         },
         u_occupation: {
             type: Number,
-            enum: Object.values(EOccupation).filter((value) => typeof value === 'number') as number[]
+            enum: Object.values(EOccupation).filter(
+                (value) => typeof value === 'number'
+            ) as number[]
         },
         u_status: {
             type: Number,
-            enum: Object.values(EStatus).filter((value) => typeof value === 'number') as number[],
+            enum: Object.values(EStatus).filter(
+                (value) => typeof value === 'number'
+            ) as number[],
             required: true,
             default: EStatus.Active
         }
